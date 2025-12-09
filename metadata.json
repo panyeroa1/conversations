@@ -1,0 +1,8 @@
+{
+  "name": "Orbit & Eburon Live",
+  "description": "Minimalist real-time translation and broadcasting tool using Gemini Flash Lite and TTS.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
