@@ -145,7 +145,9 @@ export const ALL_LANGUAGES: Language[] = [
 ];
 
 export const TTS_PROVIDERS = [
-  { id: 'cartesia', label: 'Cartesia Sonic' },
-  { id: 'gemini', label: 'Gemini 2.5 TTS' },
-  { id: 'openai', label: 'OpenAI HD (Simulated)' },
+  { id: 'cartesia', value: 'cartesia', label: 'Cartesia Sonic', voice: 'Michael' },
+  { id: 'gemini', value: 'eburon-core', label: 'Eburon Core', voice: 'Fenrir' },
+  { id: 'gemini', value: 'eburon-flow', label: 'Eburon Flow', voice: 'Puck' },
+  { id: 'gemini', value: 'eburon-deep', label: 'Eburon Deep', voice: 'Kore' },
+  { id: 'gemini', value: 'eburon-lite', label: 'Eburon Lite', voice: 'Zephyr' },
 ];

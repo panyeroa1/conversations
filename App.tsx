@@ -65,7 +65,7 @@ const App: React.FC = () => {
         
         {/* Footer */}
         <footer className="px-6 py-3 border-t border-white/5 text-[10px] text-gray-600 flex justify-between uppercase tracking-widest z-10 bg-black/20">
-          <span>Powered by Gemini 2.5 Flash Lite & Cartesia Sonic</span>
+          <span>Powered by Eburon & Cartesia Sonic</span>
           <span>v2.1.0-Orbit</span>
         </footer>
 

@@ -9,7 +9,8 @@ const Translator: React.FC = () => {
   const [targetLang, setTargetLang] = useState('es-ES');
   const [originalText, setOriginalText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
-  const [ttsProvider, setTtsProvider] = useState('cartesia'); // Default to Cartesia as requested
+  // Set default to Cartesia value
+  const [ttsProviderValue, setTtsProviderValue] = useState('cartesia'); 
   const [ttsEnabled, setTtsEnabled] = useState(true);
   
   // To track polling changes
@@ -61,8 +62,11 @@ const Translator: React.FC = () => {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     
-    // Pass provider to service
-    const audioData = await generateSpeech(text, ttsProvider);
+    // Find the full provider object based on current selected value
+    const providerConfig = TTS_PROVIDERS.find(p => p.value === ttsProviderValue) || TTS_PROVIDERS[0];
+
+    // Pass provider ID and Voice to service
+    const audioData = await generateSpeech(text, providerConfig.id, providerConfig.voice);
     
     if (audioData) {
       const ctx = audioContextRef.current;
@@ -112,11 +116,11 @@ const Translator: React.FC = () => {
         </select>
         
         <select 
-          value={ttsProvider}
-          onChange={(e) => setTtsProvider(e.target.value)}
+          value={ttsProviderValue}
+          onChange={(e) => setTtsProviderValue(e.target.value)}
           className="bg-card border border-white/10 rounded-lg py-2 px-3 text-xs text-gray-300 focus:border-accent focus:outline-none w-28"
         >
-           {TTS_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+           {TTS_PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
 
         <button
