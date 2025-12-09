@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AudioSource, Language } from '../types';
 import { ALL_LANGUAGES } from '../constants';
 import { uploadTranscript } from '../services/supabase';
+import { transcribeAudio } from '../services/gemini';
 
 interface BroadcasterProps {
   meetingId: string;
@@ -22,6 +23,8 @@ const Broadcaster: React.FC<BroadcasterProps> = ({ meetingId }) => {
   const recognitionRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Load Audio Devices
   useEffect(() => {
@@ -37,6 +40,18 @@ const Broadcaster: React.FC<BroadcasterProps> = ({ meetingId }) => {
       }
     };
     getDevices();
+  }, []);
+
+  // Check API Key on mount
+  useEffect(() => {
+    import('../constants').then(({ GEMINI_API_KEY }) => {
+      if (!GEMINI_API_KEY) {
+        console.error('[Broadcaster] GEMINI_API_KEY is not set! Screen/tab transcription will not work.');
+        console.error('[Broadcaster] Please set VITE_GEMINI_API_KEY in your .env file');
+      } else {
+        console.log('[Broadcaster] GEMINI_API_KEY is configured');
+      }
+    });
   }, []);
 
   // Initialize Speech Recognition
@@ -71,23 +86,122 @@ const Broadcaster: React.FC<BroadcasterProps> = ({ meetingId }) => {
   // Handle Start/Stop
   const toggleBroadcast = async () => {
     if (isLive) {
+      // Stop broadcast
       setIsLive(false);
+      
+      // Stop Web Speech API if active
       recognitionRef.current?.stop();
+      
+      // Stop MediaRecorder if active
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // Stop all stream tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
     } else {
+      // Start broadcast
+      console.log('[Broadcaster] Starting broadcast...', { audioSource, sourceLang });
       try {
         if (audioSource === AudioSource.SCREEN || audioSource === AudioSource.TAB) {
-           streamRef.current = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-           if (videoRef.current) videoRef.current.srcObject = streamRef.current;
-        } 
-        recognitionRef.current.lang = sourceLang;
-        recognitionRef.current.start();
+          // For screen/tab audio: use getDisplayMedia + MediaRecorder + Gemini transcription
+          console.log('[Broadcaster] Requesting display media...');
+          
+          try {
+            streamRef.current = await navigator.mediaDevices.getDisplayMedia({ 
+              video: true, 
+              audio: true 
+            });
+            console.log('[Broadcaster] Display media granted', streamRef.current);
+          } catch (displayError: any) {
+            console.error('[Broadcaster] getDisplayMedia failed:', displayError);
+            alert(`Screen sharing failed: ${displayError.message || displayError}\n\nPlease make sure to:\n1. Allow screen sharing permission\n2. Select "Share audio" checkbox\n3. Use Chrome or Edge browser`);
+            return;
+          }
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = streamRef.current;
+          }
+          
+          // Get audio track from display media
+          const audioTrack = streamRef.current.getAudioTracks()[0];
+          if (!audioTrack) {
+            alert("No audio track found in the selected screen/tab.\n\nPlease ensure:\n1. The tab/screen has audio playing\n2. 'Share audio' checkbox is checked in the sharing dialog");
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+            return;
+          }
+          
+          console.log('[Broadcaster] Audio track found:', audioTrack.label);
+          
+          // Create a new MediaStream with only the audio track
+          const audioStream = new MediaStream([audioTrack]);
+          
+          // Set up MediaRecorder for audio capture
+          const options = { mimeType: 'audio/webm' };
+          mediaRecorderRef.current = new MediaRecorder(audioStream, options);
+          audioChunksRef.current = [];
+          
+          mediaRecorderRef.current.ondataavailable = async (event) => {
+            if (event.data.size > 0) {
+              audioChunksRef.current.push(event.data);
+              
+              // Create a blob from chunks and transcribe
+              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+              console.log('[Broadcaster] Sending audio chunk for transcription...', audioBlob.size, 'bytes');
+              
+              try {
+                const transcribedText = await transcribeAudio(audioBlob);
+                if (transcribedText) {
+                  console.log('[Broadcaster] Transcription received:', transcribedText);
+                  setTranscript(prev => {
+                    const newText = prev ? prev + ' ' + transcribedText : transcribedText;
+                    return newText.trim();
+                  });
+                } else {
+                  console.warn('[Broadcaster] Empty transcription returned');
+                }
+              } catch (transcribeError) {
+                console.error('[Broadcaster] Transcription error:', transcribeError);
+              }
+              
+              // Clear chunks after processing
+              audioChunksRef.current = [];
+            }
+          };
+          
+          mediaRecorderRef.current.onerror = (event: any) => {
+            console.error('[Broadcaster] MediaRecorder error:', event.error);
+          };
+          
+          mediaRecorderRef.current.onstop = () => {
+            console.log('[Broadcaster] MediaRecorder stopped');
+          };
+          
+          // Start recording with time slices (every 3 seconds)
+          mediaRecorderRef.current.start(3000);
+          console.log('[Broadcaster] MediaRecorder started for screen/tab audio');
+          
+        } else {
+          // For microphone: use Web Speech API (existing behavior)
+          const constraints: MediaStreamConstraints = {
+            audio: selectedDeviceId ? { deviceId: selectedDeviceId } : true
+          };
+          streamRef.current = await navigator.mediaDevices.getUserMedia(constraints);
+          
+          recognitionRef.current.lang = sourceLang;
+          recognitionRef.current.start();
+          console.log('[Broadcaster] Web Speech API started for microphone');
+        }
+        
         setIsLive(true);
-      } catch (err) {
-        alert("Broadcast failed. Check permissions.");
+        console.log('[Broadcaster] Broadcast started successfully');
+      } catch (err: any) {
+        console.error('[Broadcaster] Start error:', err);
+        alert(`Broadcast failed: ${err.message || err}\n\nPlease check:\n1. Browser permissions\n2. Microphone/audio access\n3. Console for detailed errors`);
       }
     }
   };

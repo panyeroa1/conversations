@@ -4,6 +4,9 @@ import { Language } from './types';
 export const SUPABASE_URL = "https://mkmyfdqrejabgnymfmbb.supabase.co";
 export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbXlmZHFyZWphYmdueW1mbWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzMxMzYsImV4cCI6MjA4MDAwOTEzNn0.x_1VnQ-HWWPwNe9jjafhD_uoH2dyCyjO2RaKOQhYoJw";
 
+// Gemini API Configuration
+export const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+
 export const ALL_LANGUAGES: Language[] = [
     { code: "en-US", label: "English (US)" },
     { code: "", label: "✨ Auto-detect / System Default" },

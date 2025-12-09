@@ -1,7 +1,8 @@
 import { GoogleGenAI, Modality } from "@google/genai";
+import { GEMINI_API_KEY } from "../constants";
 
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 export const translateText = async (text: string, targetLang: string): Promise<string> => {
   if (!text.trim()) return "";
@@ -115,5 +116,48 @@ export const generateSpeech = async (text: string, provider: string = 'gemini', 
   } catch (error) {
     console.error("TTS error:", error);
     return null;
+  }
+};
+
+/**
+ * Transcribe audio using Gemini Live Audio API
+ * @param audioBlob - Audio blob from MediaRecorder (WebM format)
+ * @returns Transcribed text
+ */
+export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
+  if (!audioBlob || audioBlob.size === 0) return "";
+  
+  try {
+    // Convert blob to base64
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64Audio = btoa(binary);
+    
+    // Use Gemini multimodal for audio transcription
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: audioBlob.type || 'audio/webm',
+              data: base64Audio,
+            },
+          },
+          {
+            text: "Transcribe this audio exactly. Output ONLY the transcribed text with no additional commentary, formatting, or explanations."
+          }
+        ],
+      },
+    });
+    
+    return response.text || "";
+  } catch (error) {
+    console.error("Transcription error:", error);
+    return "";
   }
 };
