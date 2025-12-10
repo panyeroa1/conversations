@@ -147,29 +147,45 @@ const Broadcaster: React.FC<BroadcasterProps> = ({ meetingId }) => {
           
           mediaRecorderRef.current.ondataavailable = async (event) => {
             if (event.data.size > 0) {
-              audioChunksRef.current.push(event.data);
+              // Process each chunk directly (no accumulation needed with timeslice)
+              const audioBlob = event.data;
               
-              // Create a blob from chunks and transcribe
-              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-              console.log('[Broadcaster] Sending audio chunk for transcription...', audioBlob.size, 'bytes');
+              console.log('[Broadcaster] Audio chunk captured:', {
+                size: audioBlob.size,
+                type: audioBlob.type,
+                sizeKB: (audioBlob.size / 1024).toFixed(2) + ' KB'
+              });
+              
+              // Validate minimum size (at least 1KB to avoid empty/tiny chunks)
+              if (audioBlob.size < 1000) {
+                console.warn('[Broadcaster] Chunk too small, skipping transcription:', audioBlob.size, 'bytes');
+                return;
+              }
               
               try {
+                console.log('[Broadcaster] Sending audio to Gemini for transcription...');
                 const transcribedText = await transcribeAudio(audioBlob);
-                if (transcribedText) {
-                  console.log('[Broadcaster] Transcription received:', transcribedText);
+                
+                if (transcribedText && transcribedText.trim()) {
+                  console.log('[Broadcaster] ✓ Transcription received:', transcribedText);
                   setTranscript(prev => {
                     const newText = prev ? prev + ' ' + transcribedText : transcribedText;
                     return newText.trim();
                   });
                 } else {
-                  console.warn('[Broadcaster] Empty transcription returned');
+                  console.warn('[Broadcaster] ⚠ Empty transcription returned from Gemini');
                 }
-              } catch (transcribeError) {
-                console.error('[Broadcaster] Transcription error:', transcribeError);
+              } catch (transcribeError: any) {
+                console.error('[Broadcaster] ✗ Transcription error:', {
+                  error: transcribeError,
+                  message: transcribeError?.message || 'Unknown error',
+                  blobSize: audioBlob.size
+                });
+                // Show user-visible error for API failures
+                if (transcribeError?.message?.includes('API key') || transcribeError?.message?.includes('401')) {
+                  alert('Transcription failed: Invalid or missing Gemini API key. Please check your .env file.');
+                }
               }
-              
-              // Clear chunks after processing
-              audioChunksRef.current = [];
             }
           };
           
